@@ -84,7 +84,7 @@ namespace Tests
             int zero = 0;
             MyTask<int> task = new MyTask<int>(() => 100500 / zero);
             threadPool.Enqueue(task);
-            
+
             try
             {
                 var res = task.Result;
@@ -134,5 +134,24 @@ namespace Tests
             Assert.Throws<ObjectDisposedException>(() => threadPool.Enqueue(task));
         }
 
+        [Fact]
+        public void TestManyContinuations()
+        {
+            var threadPool = new Lib.ThreadPool(4);
+            var task = new MyTask<int>(() => 0);
+            var last = task;
+            int[] vals = { 1, 2, 3, 4 , 5, 6, 7, 8, 9, 10};
+            for (int i = 0; i < vals.Length; i++)
+            {
+                var y = vals[i];
+                var cont = last.ContinueWith<int>(x => x + y);
+                last = (MyTask<int>)cont;
+            }
+            threadPool.Enqueue(task);
+            
+            Thread.Sleep(1000);
+            Assert.Equal(vals.Sum(), last.Result);
+            threadPool.Dispose();
+        }
     }
 }

@@ -4,22 +4,22 @@ namespace Lib
     public class MyTask<TResult> : IMyTask<TResult>
     {
         private Func<TResult> _task;
-        private TResult _result;
+        private TResult? _result;
         private Exception? _exception;
-        private ManualResetEvent _waitHandler = new ManualResetEvent(false);
+        private readonly object _lock = new object();
 
         public bool IsCompleted { get; private set; }
-        public bool IsFaulted { get; private set; }
         public bool IsRefused { get; private set; }
         public IBaseTask? Continuation { get; private set; }
-        public bool HasContinuation { get { return Continuation != null; } }
 
         public void Refuse()
         {
-            IsCompleted = false;
-            IsFaulted = false;
-            IsRefused = true;
-            _waitHandler.Set();
+            lock (_lock)
+            {
+                IsCompleted = false;
+                IsRefused = true;
+                Monitor.PulseAll(_lock);
+            }
         }
 
         public MyTask(Func<TResult> task)
@@ -30,17 +30,20 @@ namespace Lib
         {
             try
             {
-                _result = _task.Invoke();
+                var result = _task.Invoke();
+                _result = result;
             }
             catch (Exception e)
             {
                 _exception = e;
-                IsFaulted = true;
             }
             finally
             {
-                IsCompleted = true;
-                _waitHandler.Set();
+                lock (_lock)
+                {
+                    IsCompleted = true;
+                    Monitor.PulseAll(_lock);
+                }
             }
         }
 
@@ -48,9 +51,14 @@ namespace Lib
         {
             get
             {
-                while (!IsCompleted && !IsFaulted && !IsRefused) { _waitHandler.WaitOne(); }
+                lock ( _lock )
+                {
+                    if (!IsCompleted && !IsRefused) {
+                        Monitor.Wait(_lock);
+                    }
+                }
 
-                if (IsFaulted)
+                if (_exception != null)
                 {
                     throw new AggregateException(_exception);
                 }

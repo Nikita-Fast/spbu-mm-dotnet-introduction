@@ -69,9 +69,11 @@ namespace Lib
                 if (task != null)
                 {
                     task.Run();
-                    if (task.HasContinuation)
+
+                    var continuation = task.Continuation;
+                    if (continuation != null)
                     {
-                        Enqueue(task.Continuation);
+                        Enqueue(continuation);
                     }
                 }
             }
